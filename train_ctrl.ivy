@@ -1,0 +1,176 @@
+#lang ivy1.7
+attribute method = mc
+
+# Enumerated type definitions
+type mode_states = {away, wait, bridge}
+type signal_states = {green, red}
+type output_states = {arrive, leave, none}
+type train_names = {e, w}
+
+
+# Global signal and output vars for component communication
+individual e_signal : signal_states
+individual w_signal : signal_states
+individual e_out : output_states
+individual w_out : output_states
+
+
+# Initialize environment to red lights and trains floating
+after init {
+   e_signal := red;
+   w_signal := red;
+   e_out := none;
+   w_out := none
+}
+
+
+# Module framework for a train and its environment (state mchn)
+module train(id:train_names) = {
+   # Internal mode and id names
+   individual mode : mode_states
+   individual id : train_names
+
+   # initialize to away and give a name
+   after init {
+      mode := away;
+      id := id;
+   }
+
+   # fsm A1 for both east and west train
+   action a1_env = {
+      if(id = e){
+         if(mode = away) {
+	    e_out := arrive;
+         } else if(mode = bridge) {
+            e_out := leave;
+         } # do nothing during none
+    
+      } else if(id = w){
+         if(mode = away) {
+	    w_out := arrive;
+         } else if(mode = bridge) {
+            w_out := leave;
+         } # do nothing during none
+      }
+   }    
+
+   # fsm A2 for both east and west train
+   action a2_train = {
+      if(mode = away){
+         if(id = e & e_out = arrive){
+	    mode := wait;
+	 } else if(id = w & w_out = arrive){
+	    mode := wait;
+	 }
+      } else if(mode = wait){
+      	 if(id = e & e_signal = green){
+	    mode := bridge;
+	 } else if(id = w & w_signal = green){
+	    mode := bridge;
+	 }
+      } else if(mode = bridge){
+         if(id = e & e_out = leave){
+	    mode := away;
+	 } else if(id = w & w_out = leave){
+	    mode := away;
+	 }
+      }
+   }
+}
+
+
+# bridge semiphore controller module, only one is needed
+isolate controller = {
+   # fairness and safety "near" booleans
+   individual e_near : bool
+   individual w_near : bool
+
+   # initialize
+   after init {
+      e_near := false;
+      w_near := false;
+   }
+
+   # fsm A3 for bridge control
+   action a3_ctrl = {
+      if(e_out = arrive){ e_near := true; }
+      if(e_out = leave){ e_near := false; }
+      if(w_out = arrive){ w_near := true; }
+      if(w_out = leave){ w_near := false; }
+
+      if(~e_near){ e_signal := red }
+      else if(w_signal = red){ e_signal := green }
+
+      if(~w_near){ w_signal := red }
+      else if(e_signal = red){w_signal := green}
+   }
+}
+
+
+module fair_monitor(id:train_names) = {
+   type m_states = {0,1,2,3}
+
+   individual id:train_names
+   individual s:m_states
+
+   after init {
+      id := id;
+      s := 0;
+   }
+
+   action step = {
+      if(id = w){
+         if(s = 0){
+            if(w_out = arrive){ s := 1; }
+         } else if(s = 1){
+            if(w_signal = green){ s := 0; }
+   	    if(e_out = leave){ s := 2; }
+         } else if(s = 2){
+	    if(w_signal = green){ s := 0; }
+	    if(e_out = leave){ s := 3; }
+	 }
+      } else if(id = e){
+         if(s = 0){
+            if(e_out = arrive){ s := 1; }
+         } else if(s = 1){
+            if(e_signal = green){ s := 0; }
+   	    if(w_out = leave){ s := 2; }
+         } else if(s = 2){
+	    if(e_signal = green){ s := 0; }
+	    if(w_out = leave){ s := 3; }
+	 }
+      }
+   }
+}
+
+
+# Create East and West train
+instance trains(X:train_names) : train(X)
+
+# Create East and West monitor
+instance monitors(X:train_names) : fair_monitor(X)
+
+
+# Event for IVy that controls one cycle of system
+action event = {
+   e_out := *; # Non-deterministic next action
+   w_out := *; # TODO - CAN CALL LEAVE SUBSEQUENTLY ARBITRARILY
+
+   call trains(e).a1_env; # Update trains
+   call trains(w).a1_env;
+   call trains(e).a2_train;
+   call trains(w).a2_train;
+
+   call controller.a3_ctrl; # Update controller
+
+   call monitors(e).step;
+   call monitors(w).step;
+}
+
+
+# Invariant: both trains cannot be on the bridge at once (crash)
+# Invariant: neither trains can enter fairness(3)
+invariant ~(trains(e).mode = bridge & trains(w).mode = bridge)
+invariant ~(monitors(e).s = 2 | monitors(w).s = 2)
+
+export event
