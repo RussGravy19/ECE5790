@@ -1,0 +1,133 @@
+#lang ivy1.7
+attribute method = mc
+
+
+# Enumerated type definitions
+type num = {0..12}
+type pID = {0..3} # Set the num processes here!
+type mState = {start, door, err}
+
+
+# Global vars
+individual flag(X:pID) : num  # Process flags
+individual cnt(X:pID) : num     # Process program counters
+individual critCnt : num
+individual s(X:pID) : mState
+
+
+# Initialize environment
+after init{
+   flag(X) := 0; # All flags are initially zero, all processes 
+   cnt(X) := 1;  #    start at the beginning of the protocol
+   critCnt := 0;
+   s(X) := start;
+}
+
+
+module process(id:pId) = {
+   
+   action step = {
+      if(cnt(id) = 1){
+         if * {
+            cnt(id) := 2;
+            flag(id) := 1;
+         } else {
+            cnt(id) := 1;
+         }
+      } else if(cnt(id) = 2){
+         if exists X:pID. (flag(X) >= 3) {   # If any flag is >= 3
+            cnt(id) := 2;                    # Process must wait
+            flag(id) := 1;
+         } else {                            # If all flags are < 3
+            if*{
+               cnt(id) := 4;                 # Process can continue to the door
+               flag(id) := 3;
+            } else {                      
+               cnt(id) := 2;                 # ..or stay put
+               flag(id) := 1;
+            }
+         }
+
+      } else if(cnt(id) = 4){
+         if exists X:pID. flag(X) = 1 {  # If any flag is =1
+            if*{
+               cnt(id) := 6;           # Process must wait in lobby
+               flag(id) := 2;
+            } else {
+               cnt(id) := 4;           # ...or stay put
+               flag(id) := 3;
+            }
+         } else {                      # If no flags are =1
+            if*{
+               cnt(id) := 8;           # Process can continue to inner sanctum
+               flag(id) := 4;
+            } else {
+               cnt(id) := 4;           # ...or stay put
+               flag(id) := 3;
+            }
+         }
+      }else if(cnt(id) = 6){
+         if exists X:pID. flag(X) = 4 {   # If any flag is =4
+            if*{
+               cnt(id) := 8;              # Process can continue to inner sanctum
+               flag(id) := 4;
+            } else {
+               cnt(id) := 6;              # ...or stay put
+               cnt(id) := 2;
+            }
+         } else {                         # If no flags are =4
+            cnt(id) := 6;                 # Process must wait in lobby
+            flag(id) := 2;
+         }
+      }else if(cnt(id) = 8){
+         if exists X:pID. ~(flag(X) < 2) & (X < id){  # If any higher prio flags are >= 2 
+            cnt(id) := 8;                             # Process must wait
+            flag(id) := 4;
+         } else {                                     # If all flags are < 2
+            if*{
+               cnt(id) := 10;                         # Process can continue to crit sectn
+               critCnt := critCnt + 1;                #     track processes entering crit
+            } else {
+               cnt(id) := 8;                          # ...or stay put
+               flag(id) := 4
+            }
+         }
+      }else if(cnt(id) = 10){
+                                       # If any lower priority flags are NOT 0,1, or 4
+         if exists X:pID. ~(flag(X) = 0 | flag(X) = 1 | flag(X) = 4) & (X > id){
+            cnt(id) := 10;             # Process must wait
+         } else {                      # If all lower priority flags are 0,1, or 4
+           if*{
+               cnt(id) := 12;          # Process can continue out of critical
+               critCnt := critCnt - 1; #     track processes exiting crit
+               flag(id) := 0;
+            } else {
+               cnt(id) := 10;          # ...or stay put
+            }         
+         }
+      }else if(cnt(id) = 12){
+         if*{
+            cnt(id) := 1;              # Process can continue out of inner sanctum
+         } else {
+            cnt(id) := 12;             # ...or stay put
+            flag(id) := 0;
+         }
+      }else{
+
+      }
+   }
+   export step
+}
+
+
+# Create all processes
+instance group(X:pID) : process(X)
+
+
+invariant ~(critCnt >= 2)
+# Invariant a.) -- PROGRAMMER NOTE: Testing invariant counterexamples
+invariant forall X:pID,Y:pID. ~((cnt(X) >= 8) & (cnt(X) <= 12) & (cnt(Y) = 4))
+# Invariant b.)
+invariant forall X:pID,Y:pID. ~((X > Y) & (cnt(X) >= 10) & (cnt(Y) >= 5))
+# Invariant c.)
+invariant forall X:pID,Y:pID. ~((X~=Y) & (cnt(X) = 12) & (Y >= 5)&(Y <= 12) & (flag(Y) ~= 4))

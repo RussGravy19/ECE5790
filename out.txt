@@ -1,0 +1,148 @@
+
+Isolate this:
+type num
+type pID
+function flag(V0:pID) : num
+individual critCnt : num
+function cnt(V0:pID) : num
+
+conjecture [invar4] ~critCnt >= 2
+conjecture [invar5] forall X,Y. ~(cnt(X) >= 8 & cnt(X) <= 12 & cnt(Y) = 4)
+conjecture [invar6] forall X,Y. ~(X:pID > Y & cnt(X) >= 10 & cnt(Y) >= 5)
+conjecture [invar7] forall X,Y. ~(X:pID ~= Y & cnt(X) = 12 & Y >= 5 & Y <= 12 & flag(Y) ~= 4)
+interp num -> {0:num .. 12:num}
+interp pID -> {0:pID .. 3:pID}
+
+after init {
+    {
+        flag(X) := 0:num;
+        cnt(X) := 1:num;
+        critCnt := 0:num;
+        {
+            
+        }
+    }
+}
+action ext:group.step(prm:X_a:pID) = {
+    if cnt(prm:X_a) = 1 {
+        if * {
+            cnt(prm:X_a) := 2:num;
+            flag(prm:X_a) := 1:num
+        }
+        else {
+            cnt(prm:X_a) := 1:num
+        }
+    }
+    else {
+        if cnt(prm:X_a) = 2 {
+            if exists X. flag(X) >= 3 {
+                cnt(prm:X_a) := 2:num;
+                flag(prm:X_a) := 1:num
+            }
+            else {
+                if * {
+                    cnt(prm:X_a) := 4:num;
+                    flag(prm:X_a) := 3:num
+                }
+                else {
+                    cnt(prm:X_a) := 2:num;
+                    flag(prm:X_a) := 1:num
+                }
+            }
+        }
+        else {
+            if cnt(prm:X_a) = 4 {
+                if exists X. flag(X) = 1 {
+                    if * {
+                        cnt(prm:X_a) := 6:num;
+                        flag(prm:X_a) := 2:num
+                    }
+                    else {
+                        cnt(prm:X_a) := 4:num;
+                        flag(prm:X_a) := 3:num
+                    }
+                }
+                else {
+                    if * {
+                        cnt(prm:X_a) := 8:num;
+                        flag(prm:X_a) := 4:num
+                    }
+                    else {
+                        cnt(prm:X_a) := 4:num;
+                        flag(prm:X_a) := 3:num
+                    }
+                }
+            }
+            else {
+                if cnt(prm:X_a) = 6 {
+                    if exists X. flag(X) = 4 {
+                        if * {
+                            cnt(prm:X_a) := 8:num;
+                            flag(prm:X_a) := 4:num
+                        }
+                        else {
+                            cnt(prm:X_a) := 6:num;
+                            cnt(prm:X_a) := 2:num
+                        }
+                    }
+                    else {
+                        cnt(prm:X_a) := 6:num;
+                        flag(prm:X_a) := 2:num
+                    }
+                }
+                else {
+                    if cnt(prm:X_a) = 8 {
+                        if exists X. ~flag(X) < 2 & X < prm:X_a {
+                            cnt(prm:X_a) := 8:num;
+                            flag(prm:X_a) := 4:num
+                        }
+                        else {
+                            if * {
+                                cnt(prm:X_a) := 10:num;
+                                critCnt := critCnt + 1
+                            }
+                            else {
+                                cnt(prm:X_a) := 8:num;
+                                flag(prm:X_a) := 4:num
+                            }
+                        }
+                    }
+                    else {
+                        if cnt(prm:X_a) = 10 {
+                            if exists X. ~(flag(X) = 0 | flag(X) = 1 | flag(X) = 4) & X > prm:X_a {
+                                cnt(prm:X_a) := 10:num
+                            }
+                            else {
+                                if * {
+                                    cnt(prm:X_a) := 12:num;
+                                    critCnt := critCnt - 1;
+                                    flag(prm:X_a) := 0:num
+                                }
+                                else {
+                                    cnt(prm:X_a) := 10:num
+                                }
+                            }
+                        }
+                        else {
+                            if cnt(prm:X_a) = 12 {
+                                if * {
+                                    cnt(prm:X_a) := 1:num
+                                }
+                                else {
+                                    cnt(prm:X_a) := 12:num;
+                                    flag(prm:X_a) := 0:num
+                                }
+                            }
+                            else {
+                                
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+export ext:group.step
+
+OK
