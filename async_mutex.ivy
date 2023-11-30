@@ -5,14 +5,12 @@ attribute method = mc
 # Enumerated type definitions
 type num = {0..12}
 type pID = {0..3} # Set the num processes here!
-type mState = {start, door, err}
 
 
 # Global vars
 individual flag(X:pID) : num  # Process flags
 individual cnt(X:pID) : num     # Process program counters
 individual critCnt : num
-individual s(X:pID) : mState
 
 
 # Initialize environment
@@ -20,7 +18,6 @@ after init{
    flag(X) := 0; # All flags are initially zero, all processes 
    cnt(X) := 1;  #    start at the beginning of the protocol
    critCnt := 0;
-   s(X) := start;
 }
 
 
